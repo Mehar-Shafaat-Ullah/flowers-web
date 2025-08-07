@@ -1,0 +1,57 @@
+name: Deploy Flower App
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    env:
+      IMAGE_NAME: flower-app
+      BLUE_PORT: 5000
+      GREEN_PORT: 5001
+      STREAM_DIR: /etc/nginx/includes
+      STREAM_LINK: /etc/nginx/includes/active_stream.conf
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Determine target color
+        id: color
+        run: |
+          CURRENT=$(cat $STREAM_LINK)
+          if echo "$CURRENT" | grep -q "$BLUE_PORT"; then
+            echo "target=green" >> $GITHUB_OUTPUT
+          else
+            echo "target=blue" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Docker image
+        run: |
+          docker build -t $IMAGE_NAME:${{ steps.color.outputs.target }} .
+
+      - name: Stop & remove old container
+        run: |
+          if [ "${{ steps.color.outputs.target }}" = "green" ]; then
+            docker stop flower-green || true
+            docker rm flower-green || true
+          else
+            docker stop flower-blue || true
+            docker rm flower-blue || true
+          fi
+
+      - name: Run new container
+        run: |
+          if [ "${{ steps.color.outputs.target }}" = "green" ]; then
+            docker run -d --name flower-green -p 5001:80 $IMAGE_NAME:green
+            ln -sf $STREAM_DIR/green.conf $STREAM_LINK
+          else
+            docker run -d --name flower-blue -p 5000:80 $IMAGE_NAME:blue
+            ln -sf $STREAM_DIR/blue.conf $STREAM_LINK
+          fi
+
+      - name: Reload NGINX
+        run: sudo nginx -s reload
