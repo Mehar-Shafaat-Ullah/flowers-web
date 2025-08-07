@@ -43,15 +43,16 @@ jobs:
             docker rm flower-blue || true
           fi
 
-      - name: Run new container
+      - name: Run new container and update NGINX link
         run: |
           if [ "${{ steps.color.outputs.target }}" = "green" ]; then
-            docker run -d --name flower-green -p 5001:80 $IMAGE_NAME:green
-            ln -sf $STREAM_DIR/green.conf $STREAM_LINK
+            docker run -d --name flower-green -p $GREEN_PORT:80 $IMAGE_NAME:green
+            sudo ln -sf $STREAM_DIR/green.conf $STREAM_LINK
           else
-            docker run -d --name flower-blue -p 5000:80 $IMAGE_NAME:blue
-            ln -sf $STREAM_DIR/blue.conf $STREAM_LINK
+            docker run -d --name flower-blue -p $BLUE_PORT:80 $IMAGE_NAME:blue
+            sudo ln -sf $STREAM_DIR/blue.conf $STREAM_LINK
           fi
 
       - name: Reload NGINX
-        run: sudo nginx -s reload
+        run: |
+          sudo nginx -s reload
